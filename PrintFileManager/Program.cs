@@ -244,14 +244,15 @@ class Program
         
         if (!string.IsNullOrEmpty(archivePath) && !Path.IsPathFullyQualified(archivePath))
         {
+            
             throw new Exception("Archive path is not fully qualified file path.");
         }
-
-        if (!Path.Exists(archivePath))
+        
+        if (!string.IsNullOrEmpty(archivePath) && !Path.Exists(archivePath))
         {
             Directory.CreateDirectory(archivePath);
         }
-
+        
         string fullPathToWatchDir;
 
         if (Path.IsPathFullyQualified(settingsWatchPath))
