@@ -1,0 +1,133 @@
+﻿using System.Diagnostics;
+using System.Net.NetworkInformation;
+using System.Reflection.Metadata.Ecma335;
+
+namespace PrintFileManager;
+
+public class Printer
+{
+    public string MachineType {get; set;}
+    public string NetworkAddress {get; set;}
+    public string ApiKey {get; set;}
+    public string NetworkType {get; set;}
+    private string uploadCommand;
+    public bool lastConnectitvityResult { get; private set; }
+
+    //Single lock for all instances, this will be to prevent multiple uploads running at once.
+    protected static readonly SemaphoreSlim Lock = new(1, 1);
+
+    /// <summary>
+    /// Reads the upload command from the MachineTypes file for that printer.
+    /// </summary>
+    public void ReadUploadCommand()
+    {
+        //For derived classes, like the OCC, bail here because we have bespoke code for them to send files.
+        if (GetType() != typeof(Printer))
+            return;
+        
+        var fullPathToMachineDir = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "MachineTypes");
+        var files = Directory.GetFiles(fullPathToMachineDir);
+        
+        var targetFile = files.FirstOrDefault(x => x.Contains(NetworkType));
+        if (targetFile == null)
+        {
+            Utils.Log($"Unable to find uploadCommand file for MachineType {NetworkType} inside {fullPathToMachineDir}");
+            return;
+        }
+        
+        uploadCommand = File.ReadLines(targetFile).ToArray()[0];
+
+        uploadCommand = uploadCommand.Replace("[ApiKey]", ApiKey)
+            .Replace("[NetworkType]", NetworkType)
+            .Replace("[NetworkAddress]", NetworkAddress);
+
+        //
+        if (!uploadCommand.Contains("-sS") && uploadCommand.ToLower().Contains("curl"))
+        {
+            uploadCommand += " -sS";
+        }
+    }
+
+    /// <summary>
+    /// Tests network access to a printer.
+    /// </summary>
+    /// <returns>True if it can communicate on the network</returns>
+    public virtual async Task<bool> TestPrinterNetworkAccess()
+    {
+        //Start with a basic ping test. No ping, don't bother moving forward.
+        using (Ping pinger = new Ping())
+        {
+            var reply = await pinger.SendPingAsync(NetworkAddress, TimeSpan.FromSeconds(4));
+            if (reply.Status != IPStatus.Success)
+            {
+                lastConnectitvityResult = false;
+                return false;
+            }
+        }
+
+        lastConnectitvityResult = true;
+        return true;
+    }
+
+    /// <summary>
+    /// Attempts to send a file to a printer
+    /// </summary>
+    /// <param name="filePath">File to send</param>
+    /// <returns>True if success, false otherwise</returns>
+    public virtual async Task<bool> SendFile(string filePath)
+    {
+        if (!await TestPrinterNetworkAccess())
+        {
+            return false;
+        }
+
+        await Lock.WaitAsync();
+        try
+        {
+            var sendCmd = uploadCommand.Replace("[FilePath]", filePath);
+
+            var processStart = new ProcessStartInfo()
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c {sendCmd}",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+
+            Utils.Log($"Sending to: {NetworkAddress} Using:\n{sendCmd}");
+
+            using var process = Process.Start(processStart)!;
+            
+            var stdOut = await process.StandardOutput.ReadToEndAsync();
+            var stdErr = await process.StandardError.ReadToEndAsync();
+            
+            Utils.Log($"{NetworkAddress} STDOUT: {stdOut}");
+            if (!string.IsNullOrEmpty(stdErr))
+            {
+                Utils.Log($"{NetworkAddress} STDERR: {stdErr}");
+                return false;
+            }
+
+            return true;
+        }
+        catch(Exception e)
+        {
+            Utils.Log($"Exception on {NetworkAddress}\n{e.Message}");
+            return false;
+        }
+        finally
+        {
+            await Task.Delay(1000); //Force small delay between sends!
+            Lock.Release();
+        }
+    }
+
+    /// <summary>Returns a string that represents the current object.</summary>
+    /// <returns>A string that represents the current object.</returns>
+    public override string ToString()
+    {
+        return
+            $"{nameof(uploadCommand)}: {uploadCommand}, {nameof(MachineType)}: {MachineType}, {nameof(NetworkAddress)}: {NetworkAddress}, {nameof(ApiKey)}: {ApiKey}, {nameof(NetworkType)}: {NetworkType}, {nameof(lastConnectitvityResult)}: {lastConnectitvityResult}";
+    }
+}
