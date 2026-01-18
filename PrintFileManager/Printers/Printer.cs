@@ -71,6 +71,8 @@ public class Printer
 
     /// <summary>
     /// Attempts to send a file to a printer
+    /// Inherit from Printer and override this function to create printer specific uploads in code
+    /// Otherwise use Curl.
     /// </summary>
     /// <param name="filePath">File to send</param>
     /// <returns>True if success, false otherwise</returns>
@@ -118,7 +120,8 @@ public class Printer
         }
         finally
         {
-            await Task.Delay(1000); //Force small delay between sends!
+            //Creating too many instances for Curl too fast was unstable for me, so lets just delay between those.
+            await Task.Delay(500);
             Lock.Release();
         }
     }

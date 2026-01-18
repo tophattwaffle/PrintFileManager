@@ -2,14 +2,21 @@
 
 public class openCentauriCarbon : Printer
 {
+    private const int ChunkSize = 1024 * 1024; //1MB per documentation
+    
+    /// <summary>
+    /// Specific override for the OCC printer to send files. Based on
+    /// https://docs.opencentauri.cc/software/api/#http-file-transfer-interface
+    /// </summary>
+    /// <param name="filePath">File path to send</param>
+    /// <returns>True is success, false otherwise.</returns>
     public override async Task<bool> SendFile(string filePath)
     {
         if (!await TestPrinterNetworkAccess())
         {
             return false;
         }
-
-        const int CHUNK_SIZE = 1024 * 1024; //1MB per documentation
+        
         string url = $"http://{NetworkAddress}:3030/uploadFile/upload";
 
         long totalSize = new FileInfo(filePath).Length;
@@ -24,11 +31,11 @@ public class openCentauriCarbon : Printer
             using (var client = new HttpClient())
             using (var fileStream = File.OpenRead(filePath))
             {
-                byte[] buffer = new byte[CHUNK_SIZE];
+                byte[] buffer = new byte[ChunkSize];
                 int bytesRead;
                 long currentOffset = 0;
 
-                while ((bytesRead = await fileStream.ReadAsync(buffer, 0, CHUNK_SIZE)) > 0)
+                while ((bytesRead = await fileStream.ReadAsync(buffer, 0, ChunkSize)) > 0)
                 {
                     //Prepare the chunk
                     using (var content = new MultipartFormDataContent())
@@ -65,7 +72,6 @@ public class openCentauriCarbon : Printer
         }
         finally
         {
-            await Task.Delay(1000); //Force small delay between sends!
             Lock.Release();
         }
 
