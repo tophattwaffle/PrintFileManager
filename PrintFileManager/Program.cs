@@ -285,7 +285,7 @@ class Program
     /// </summary>
     private static void CreateMachineTypesFiles()
     {
-        var fullPathToMachineDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MachineTypes");
+        var fullPathToMachineDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NetworkTypes");
         if (!Path.Exists(fullPathToMachineDir))
         {
             Directory.CreateDirectory(fullPathToMachineDir);
@@ -300,12 +300,6 @@ class Program
             var moonrakerFile = Path.Combine(fullPathToMachineDir, "moonraker.txt");
             File.WriteAllText(moonrakerFile, moonraker, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
             Utils.Log("Moonraker CURL file created at: " + moonrakerFile);
-
-            var ecc =
-                @"curl -X POST ""http://[NetworkAddress]:3030/uploadFile/upload"" -F ""S-File-MD5=[MD5]"" -F ""Check=1"" -F ""TotalSize=[FileLength]"" -F ""File=@[FilePath]"" -F ""Offset=0""";
-            var eccFile = Path.Combine(fullPathToMachineDir, "openCentauri.txt");
-            File.WriteAllText(eccFile, ecc, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            Utils.Log("openCentauri CURL file created at: " + moonrakerFile);
         }
     }
 

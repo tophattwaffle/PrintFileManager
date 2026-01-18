@@ -25,7 +25,7 @@ public class Printer
         if (GetType() != typeof(Printer))
             return;
         
-        var fullPathToMachineDir = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "MachineTypes");
+        var fullPathToMachineDir = Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "NetworkTypes");
         var files = Directory.GetFiles(fullPathToMachineDir);
         
         var targetFile = files.FirstOrDefault(x => x.Contains(NetworkType));
