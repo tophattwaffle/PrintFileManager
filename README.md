@@ -34,13 +34,13 @@ Example File:
     LogPath=
     LogFileEnabled=true 
 
-**WatchPath** is the directory to watch for new gcode files. A full path is recommended.
-**MachineType** is what PFM looks for inside gcode files to determine what machines to send the file to
-**ArchivePath** if not null, copies gcode files to this path when starts processing a batch.
-**DeleteOnSend** if true, deletes gcode files when successfully sends to all target machines.
-**RecheckInterval** how often to retry offline/failed machines.
-**LogPath** if null, log.txt is created next to the exe. Otherwise at the full path specified.
-**LogFileEnabled** if true, writes messages to the log.txt file. If false, only logs to stdout - if running as service you won't get any output.
+- **WatchPath** is the directory to watch for new gcode files. A full path is recommended.
+- **MachineType** is what PFM looks for inside gcode files to determine what machines to send the file to
+- **ArchivePath** if not null, copies gcode files to this path when starts processing a batch.
+- **DeleteOnSend** if true, deletes gcode files when successfully sends to all target machines.
+- **RecheckInterval** how often to retry offline/failed machines.
+- **LogPath** if null, log.txt is created next to the exe. Otherwise at the full path specified.
+- **LogFileEnabled** if true, writes messages to the log.txt file. If false, only logs to stdout - if running as service you won't get any output.
 
 
 ## Printers.csv
