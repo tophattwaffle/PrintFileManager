@@ -31,8 +31,8 @@ class Program
     
     static async Task Main(string[] args)
     {
-        Utils.Log($"Starting up with build date of: {Utils.GetBuildDate()}");
         HandleSettings();
+        Utils.Log($"Starting up with build date of: {Utils.GetBuildDate()}");
         ReadPrinters();
         SetupWatcher(WatchPath);
         PendingJobManager.SetupPendingJobManaber();
