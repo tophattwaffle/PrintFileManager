@@ -5,6 +5,9 @@
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <AssemblyVersion></AssemblyVersion>
+        <FileVersion></FileVersion>
+        <SourceRevisionId>build$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss"))</SourceRevisionId>
     </PropertyGroup>
 
     <ItemGroup>

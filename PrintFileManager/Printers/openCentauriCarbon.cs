@@ -75,6 +75,7 @@ public class openCentauriCarbon : Printer
             Lock.Release();
         }
 
+        Utils.Log($"File sent to {NetworkAddress}");
         return true;
     }
 }

@@ -31,6 +31,7 @@ class Program
     
     static async Task Main(string[] args)
     {
+        Utils.Log($"Starting up with build date of: {Utils.GetBuildDate()}");
         HandleSettings();
         ReadPrinters();
         SetupWatcher(WatchPath);
@@ -41,8 +42,8 @@ class Program
     }
     
     /// <summary>
-    /// Handles when a file is changed. All files get a changed handler event after they are created, so we listen to that.
-    /// This method will handle removing duplicates from the master list so that only the latest event is acted on. 
+    /// When changes are completed, then we can process the list. Files are only added for OnCreated, but processed when
+    /// we no longer see OnChanged events.
     /// </summary>
     /// <param name="sender"></param>
     /// <param name="e"></param>
@@ -50,6 +51,17 @@ class Program
     {
         // Utils.Log($"File {e.FullPath} has been changed.");
         
+        WaitForTimeout(TimeSpan.FromSeconds(5));
+    }
+    
+    /// <summary>
+    /// Only listen to on created events to add objects to the list.
+    /// </summary>
+    /// <param name="sender"></param>
+    /// <param name="e"></param>
+    private static async void OnCreated(object sender, FileSystemEventArgs e)
+    {
+        Utils.Log($"New file created at watch path: [{e.FullPath}] waiting for writes to complete...");
         if(!(await fileQueue.GetSnapshotAsync()).Contains(e.FullPath))
         {
             // Utils.Log("Did not find path inside pending sends, adding...");
@@ -60,8 +72,6 @@ class Program
         {
             // Utils.Log("Not adding because we were already in the list!");   
         }
-        
-        WaitForTimeout(TimeSpan.FromSeconds(5));
     }
 
     private static void WaitForTimeout(TimeSpan delay)
@@ -95,6 +105,11 @@ class Program
     private static async Task StartProcessingGcodeFiles()
     {
         var workingList = await fileQueue.GetSnapshotAsync();
+
+        //Bail for empty tasks. May happen from bogus OnChanged events.
+        if (workingList.Count == 0)
+            return;
+        
         string output = "";
         foreach (var file in workingList)
         {
@@ -106,6 +121,8 @@ class Program
         {
             await ProcessGcodeFile(file);
         }
+        
+        Utils.Log($"Completed with the following files:\n{output.TrimEnd()}");
     }
 
     /// <summary>
@@ -128,8 +145,9 @@ class Program
         await fileQueue.RemoveAsync(filePath);
 
         //All sends complete, delete the file.
-        if (sendResult.All(x => x.SendFileTask.Result.Result))
+        if (sendResult.All(x => x.SendFileTask.Result.Result) && deleteOnSend)
         {
+            Utils.Log($"File {filePath} deleted!");
             FileUtils.DeleteFile(filePath);
         }
     }
@@ -156,12 +174,13 @@ class Program
         _watcher.Filter = "*.*";
 
         _watcher.Changed += OnChanged;
+        _watcher.Created += OnCreated;
         
         _watcher.EnableRaisingEvents = true;
         
         Utils.Log($"Monitoring {path}");
     }
-    
+
     /// <summary>
     /// Handles reading in the settings file. If the settings file does not exist, creates one.
     /// </summary>
