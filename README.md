@@ -76,8 +76,8 @@ Before executing the command in the .txt file, placeholder strings are replaced 
 
 ## Flow
 
- 1. File(s) are created or changed in the **WatchPath** specified in the config.ini file and waits for writes to finish. *Editing a file in the directory will retrigger the entire flow and cause a re-upload to all target machines.*
- 2. PFM gathers all GCode files that triggered a change or created - multiple files are consumed as 1 "Batch"
+ 1. File(s) are created in the **WatchPath** specified in the config.ini file and waits for writes to finish. *Editing a file in the directory will retrigger the entire flow and cause a re-upload to all target machines.*
+ 2. PFM gathers all GCode files that triggered a created event - multiple files are consumed as 1 "Batch"
  3. For each GCode file, PFM reads the file and files a line that **StartsWith** the **MachineType** string from the **config.ini** file, once found it takes whatever follows and finds all matching printers from **Printers.csv**. 
  4. PFM tests network connectivity using a basic ping to the target printers.
  5. If successful, Sends the gcode to the target printer using the command stored in the corresponding file inside the **NetworkTypes** folder.
@@ -95,7 +95,7 @@ Since e3-a was offline, a .pend file will be created in the **PendingFiles** dir
 
 ```mermaid
 flowchart TD
-A[Gcode file Created/modified] --> B(Wait for writes to complete)
+A[Gcode file Created] --> B(Wait for writes to complete)
 B --> C(Read each Gcode file for StartsWith string) --> AC{ArchivePath not null} --> AD[Copy gcode to ArchivePath]
 C --> D(Find matching printers in<br>printers.csv using MachineType value)
 D --> E{Test Network Access}
