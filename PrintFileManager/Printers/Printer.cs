@@ -54,6 +54,12 @@ public class Printer
     /// <returns>True if it can communicate on the network</returns>
     public virtual async Task<bool> TestPrinterNetworkAccess()
     {
+        if (Program.DebugAlwaysPassNetworkCheck)
+        {
+            Utils.Log($"DEBUG NETWORK CHECK PASSED {NetworkAddress}");
+            return true;
+        }
+        
         //Start with a basic ping test. No ping, don't bother moving forward.
         using (Ping pinger = new Ping())
         {
@@ -76,7 +82,7 @@ public class Printer
     /// </summary>
     /// <param name="filePath">File to send</param>
     /// <returns>True if success, false otherwise</returns>
-    public virtual async Task<bool> SendFile(string filePath)
+    public virtual async Task<bool> SendFile(GcodeFile gcodeFile)
     {
         if (!await TestPrinterNetworkAccess())
         {
@@ -86,7 +92,7 @@ public class Printer
         await Lock.WaitAsync();
         try
         {
-            var sendCmd = uploadCommand.Replace("[FilePath]", filePath);
+            var sendCmd = uploadCommand.Replace("[FilePath]", gcodeFile.FilePath);
 
             var processStart = new ProcessStartInfo()
             {
@@ -98,6 +104,12 @@ public class Printer
             };
 
             Utils.Log($"Sending to: {NetworkAddress} Using:\n{sendCmd}");
+
+            if (Program.DebugDontSend)
+            {
+                Utils.Log($"DEBUG SEND OFF FOR {NetworkAddress}");
+                return true;
+            }
 
             using var process = Process.Start(processStart)!;
             

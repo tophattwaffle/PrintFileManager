@@ -8,9 +8,9 @@ public class openCentauriCarbon : Printer
     /// Specific override for the OCC printer to send files. Based on
     /// https://docs.opencentauri.cc/software/api/#http-file-transfer-interface
     /// </summary>
-    /// <param name="filePath">File path to send</param>
+    /// <param name="gcodeFile">File path to send</param>
     /// <returns>True is success, false otherwise.</returns>
-    public override async Task<bool> SendFile(string filePath)
+    public override async Task<bool> SendFile(GcodeFile gcodeFile)
     {
         if (!await TestPrinterNetworkAccess())
         {
@@ -19,17 +19,18 @@ public class openCentauriCarbon : Printer
         
         string url = $"http://{NetworkAddress}:3030/uploadFile/upload";
 
-        long totalSize = new FileInfo(filePath).Length;
-        string md5 = FileUtils.GetMd5(filePath);
-        string uuid = Guid.NewGuid().ToString();
-
         Utils.Log($"Sending to: {NetworkAddress} using openCentauriCarbon specific upload method.");
         
+        if (Program.DebugDontSend)
+        {
+            Utils.Log($"DEBUG SEND OFF FOR {NetworkAddress}");
+            return true;
+        }
         await Lock.WaitAsync();
         try
         {
             using (var client = new HttpClient())
-            using (var fileStream = File.OpenRead(filePath))
+            using (var fileStream = File.OpenRead(gcodeFile.FilePath))
             {
                 byte[] buffer = new byte[ChunkSize];
                 int bytesRead;
@@ -40,15 +41,15 @@ public class openCentauriCarbon : Printer
                     //Prepare the chunk
                     using (var content = new MultipartFormDataContent())
                     {
-                        content.Add(new StringContent(md5), "S-File-MD5");
+                        content.Add(new StringContent(gcodeFile.Md5), "S-File-MD5");
                         content.Add(new StringContent("1"), "Check");
                         content.Add(new StringContent(currentOffset.ToString()), "Offset");
-                        content.Add(new StringContent(uuid), "Uuid");
-                        content.Add(new StringContent(totalSize.ToString()), "TotalSize");
+                        content.Add(new StringContent(gcodeFile.Uuid), "Uuid");
+                        content.Add(new StringContent(gcodeFile.TotalSize.ToString()), "TotalSize");
 
                         //Create the byte content for the current chunk
                         var fileContent = new ByteArrayContent(buffer, 0, bytesRead);
-                        content.Add(fileContent, "File", Path.GetFileName(filePath));
+                        content.Add(fileContent, "File", Path.GetFileName(gcodeFile.FilePath));
 
                         // Send the chunk
                         var response = await client.PostAsync(url, content);
@@ -72,6 +73,8 @@ public class openCentauriCarbon : Printer
         }
         finally
         {
+            //OCC sometimes needs a sec before accepting another transfer...
+            await Task.Delay(1000);
             Lock.Release();
         }
 

@@ -189,10 +189,8 @@ public static class PendingJobManager
 
     private static async Task<List<GcodeFileSendJob>> ProcessPendingFile(PendingJob job)
     {
-        Console.WriteLine(job);
         Utils.Log($"Processing pending file: {job.GcodeFilePath}");
         var gcodeFile = new GcodeFile(job.GcodeFilePath, job.Printers);
-        Console.WriteLine(gcodeFile.ToString());
 
         return await gcodeFile.SendFile();
     }

@@ -5,29 +5,6 @@ namespace PrintFileManager;
 
 public class FileUtils
 {
-    public static string GetMd5(string filePath)
-    {
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException("The specified file was not found.", filePath);
-        
-        using (var md5 = MD5.Create())
-        {
-            using (var stream = File.OpenRead(filePath))
-            {
-                return BitConverter.ToString(md5.ComputeHash(stream)).Replace("-","").ToLower();
-            }
-        }
-    }
-    
-    public static long GetFileLength(string filePath)
-    {
-        if (!File.Exists(filePath))
-            throw new FileNotFoundException("The specified file was not found.", filePath);
-
-        FileInfo fi = new FileInfo(filePath);
-        return fi.Length;
-    }
-
     public static void DeleteFile(string filePath)
     {
         if (!File.Exists(filePath))

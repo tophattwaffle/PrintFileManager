@@ -15,7 +15,8 @@ class Program
     private static string archivePath = "";
     
     //The list of files that have been added while running
-    private static readonly AsyncSafeList<string> fileQueue = new();
+    private static readonly AsyncSafeList<string> FileQueue = new();
+    private static readonly SemaphoreSlim ProcessingSemaphore = new(1, 1);
 
     public static bool deleteOnSend;
     public static bool LogToFile = false;
@@ -28,6 +29,17 @@ class Program
     
     private static CancellationTokenSource? _debounceCts;
     
+    
+    //DEBUG
+    /// <summary>
+    /// If true, will not send a file to a printer
+    /// </summary>
+    public static bool DebugDontSend = false;
+    
+    /// <summary>
+    /// If true, always passes network tests
+    /// </summary>
+    public static bool DebugAlwaysPassNetworkCheck = false;
     
     static async Task Main(string[] args)
     {
@@ -62,10 +74,10 @@ class Program
     private static async void OnCreated(object sender, FileSystemEventArgs e)
     {
         Utils.Log($"New file created at watch path: [{e.FullPath}] waiting for writes to complete...");
-        if(!(await fileQueue.GetSnapshotAsync()).Contains(e.FullPath))
+        if(!(await FileQueue.GetSnapshotAsync()).Contains(e.FullPath))
         {
             // Utils.Log("Did not find path inside pending sends, adding...");
-            await fileQueue.AddAsync(e.FullPath);
+            await FileQueue.AddAsync(e.FullPath);
             await PendingJobManager.DeletePendingFile(e.FullPath);
         }
         else
@@ -104,26 +116,62 @@ class Program
     /// </summary>
     private static async Task StartProcessingGcodeFiles()
     {
-        var workingList = await fileQueue.GetSnapshotAsync();
+        bool retry = false;
+        //Currently processing, don't let another processing action start
+        await ProcessingSemaphore.WaitAsync();
+        try
+        {
+            var workingList = await FileQueue.GetSnapshotAsync();
 
-        //Bail for empty tasks. May happen from bogus OnChanged events.
-        if (workingList.Count == 0)
-            return;
-        
-        string output = "";
-        foreach (var file in workingList)
-        {
-            output += file + "\n";
+            //Bail for empty tasks. May happen from bogus OnChanged events.
+            if (workingList.Count == 0)
+            {
+                ProcessingSemaphore.Release();
+                return;
+            }
+
+            List<string> finalList = workingList.ToList();
+            string output = "";
+            foreach (var file in workingList)
+            {
+                if (!File.Exists(file))
+                {
+                    Utils.Log($"{file} was deleted before we could obtain a lock, removing from targets.");
+                    await FileQueue.RemoveAsync(file);
+                    finalList.Remove(file);
+                    continue;
+                }
+                
+                output += file + "\n";
+            }
+
+            Utils.Log($"Working on the following files:\n{output.TrimEnd()}");
+            var allFileTasks = new List<Task>();
+            foreach (var file in finalList)
+            {
+                allFileTasks.Add(ProcessGcodeFile(file));
+            }
+
+            await Task.WhenAll(allFileTasks);
+
+            Utils.Log($"Completed with the following files:\n{output.TrimEnd()}");
+
         }
-        Utils.Log($"Working on the following files:\n{output.TrimEnd()}");
-        
-        foreach(var file in workingList)
+        catch (Exception e)
         {
-            await ProcessGcodeFile(file);
+            Utils.Log($"Unhandled exception from StartProcessingGcodeFiles! Aborting\n{e}");
+            throw new Exception(e.Message);
         }
-        
-        Utils.Log($"Completed with the following files:\n{output.TrimEnd()}");
+        finally
+        {
+            ProcessingSemaphore.Release();
+        }
+
+        //If we need to retry cause a file was missing, do it here.
+        if(retry)
+            await StartProcessingGcodeFiles();
     }
+
 
     /// <summary>
     /// Processes a single GCode file
@@ -139,11 +187,16 @@ class Program
         
         Utils.Log($"Processing {filePath}...");
         var gcodeSender = new GcodeFile(filePath);
-
         var sendResult = await gcodeSender.SendFile();
         Utils.Log($"File {filePath} has been processed");
-        await fileQueue.RemoveAsync(filePath);
+        await FileQueue.RemoveAsync(filePath);
 
+        //Intentionally hang to test multiple writes at a time.
+        await Task.Delay(5000);
+        
+        //Drop locks on files
+        gcodeSender.Dispose();
+        
         //All sends complete, delete the file.
         if (sendResult.All(x => x.SendFileTask.Result.Result) && deleteOnSend)
         {

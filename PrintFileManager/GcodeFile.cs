@@ -3,22 +3,44 @@ using System.Text;
 
 namespace PrintFileManager;
 
-public class GcodeFile
+public class GcodeFile : IDisposable
 {
     public readonly string FilePath;
 
     private readonly List<GcodeFileSendJob> _sendFileJobs;
 
+    private StreamReader _streamReader = null!;
+    private FileStream _fileStream = null!;
+    private bool _isDisposed = false;
+    
+    public long TotalSize { get; private set; }
+    public string Md5 { get; private set; } = null!;
+    public string Uuid { get; private set; } = null!;
+
     public GcodeFile(string filePath)
     {
         FilePath = filePath;
+        Init();
         _sendFileJobs = BuildSendJobs(FilePath);
     }
 
     public GcodeFile(string filePath, List<Printer> printers)
     {
         FilePath = filePath;
+        Init();
         _sendFileJobs = BuildSendJobs(FilePath, printers);
+    }
+
+    private void Init()
+    {
+        CreateStreamReader(FilePath);
+        
+        using(var md5 = MD5.Create())
+        {
+            Md5 = BitConverter.ToString(md5.ComputeHash(_fileStream)).Replace("-", "").ToLower();
+        }
+        Uuid = Guid.NewGuid().ToString();
+        TotalSize = new FileInfo(FilePath).Length;
     }
 
     /// <summary>
@@ -33,10 +55,10 @@ public class GcodeFile
         foreach (var targetPrinter in printers)
         {
             //This task<task stuff lets us setup the job now, but start it later on when we want.
-            var job = new GcodeFileSendJob(targetPrinter, new Task<Task<bool>>(() => targetPrinter.SendFile(path)));
+            var job = new GcodeFileSendJob(targetPrinter, new Task<Task<bool>>(() => targetPrinter.SendFile(this)));
             list.Add(job);
         }
-        
+
         // Utils.Log($"BuildSendJobs created for {path}");
 
         return list;
@@ -49,8 +71,21 @@ public class GcodeFile
     /// <returns>Send Jobs</returns>
     private List<GcodeFileSendJob> BuildSendJobs(string path)
     {
-        var targetPrinters = Program.Printers.Where(x => x.MachineType == GetMachineTypeFromFile(path));
+        var machineType = GetMachineTypeFromFile(path);
+        var targetPrinters = Program.Printers.Where(x => x.MachineType == machineType);
         return BuildSendJobs(path, targetPrinters);
+    }
+
+    private void CreateStreamReader(string filePath)
+    {
+        if (!File.Exists(filePath))
+        {
+            throw new FileNotFoundException($"File {filePath} not found!");
+        }
+        
+        //Grab an exclusive lock on the file
+        _fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        _streamReader = new StreamReader(_fileStream);
     }
 
     /// <summary>
@@ -63,16 +98,16 @@ public class GcodeFile
     {
         string target = "";
         var searchString = Program.Config.GetSection("App")["MachineType"]!;
-        using (var stream = new StreamReader(filePath))
+        string line;
+        
+        //Reset the stream reader before we use it to read the entire file.
+        _streamReader.BaseStream.Position = 0;
+        while ((line = _streamReader.ReadLine() ?? throw new InvalidOperationException()) != null)
         {
-            string line;
-            while ((line = stream.ReadLine() ?? throw new InvalidOperationException()) != null)
+            if (line.StartsWith(searchString))
             {
-                if (line.StartsWith(searchString))
-                {
-                    target = line.Replace(searchString, string.Empty).Trim();
-                    break;
-                }
+                target = line.Replace(searchString, string.Empty).Trim();
+                break;
             }
         }
 
@@ -80,10 +115,9 @@ public class GcodeFile
         {
             Utils.Log($"File {FilePath} has no target machine! No action will be taken.");
         }
-
         return target;
     }
-    
+
     /// <summary>
     /// Sends this file to the machines that have jobs for it.
     /// </summary>
@@ -106,5 +140,16 @@ public class GcodeFile
     public override string ToString()
     {
         return $"{nameof(FilePath)}: {FilePath}, {nameof(_sendFileJobs)}: {_sendFileJobs}";
+    }
+
+    /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+        
+        _isDisposed = true;
+        _streamReader.Dispose();
+        _fileStream.Dispose();
     }
 }
