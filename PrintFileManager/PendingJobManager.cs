@@ -178,9 +178,11 @@ public static class PendingJobManager
                 await DeletePendingFile(job);
                 var result = await ProcessPendingFile(job);
                 
+                
                 //All sends complete, delete the file.
-                if (result.All(x => x.SendFileTask.Result.Result))
+                if (result.All(x => x.SendFileTask.Result.Result) && Program.deleteOnSend)
                 {
+                    Utils.Log($"File {job.GcodeFilePath} deleted!");
                     FileUtils.DeleteFile(job.GcodeFilePath);
                 }
             }
@@ -191,7 +193,7 @@ public static class PendingJobManager
     {
         Utils.Log($"Processing pending file: {job.GcodeFilePath}");
         var gcodeFile = new GcodeFile(job.GcodeFilePath, job.Printers);
-
+        gcodeFile.Dispose();
         return await gcodeFile.SendFile();
     }
 }
