@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection.Metadata.Ecma335;
 
@@ -59,22 +60,32 @@ public class Printer
             Utils.Log($"DEBUG NETWORK CHECK PASSED {NetworkAddress}");
             return true;
         }
-        
-        //Start with a basic ping test. No ping, don't bother moving forward.
-        using (Ping pinger = new Ping())
+    
+        try 
         {
-            var reply = await pinger.SendPingAsync(NetworkAddress, TimeSpan.FromSeconds(4));
-            if (reply.Status != IPStatus.Success)
+            using (Ping pinger = new Ping())
             {
-                lastConnectitvityResult = false;
-                return false;
+                var reply = await pinger.SendPingAsync(NetworkAddress, 4000);
+            
+                if (reply.Status != IPStatus.Success)
+                {
+                    lastConnectitvityResult = false;
+                    return false;
+                }
             }
+        }
+        catch (PingException ex) when (ex.InnerException is System.Net.Sockets.SocketException sx && sx.NativeErrorCode == 11001)
+        {
+            //Don't care if the exception is an unknown host. This only occurs when DNS/Basic network isn't working.
+            //In which case, nothing will work anyway.
+            //Utils.Log($"Ping failed for {NetworkAddress}: {ex.Message}");
+            lastConnectitvityResult = false;
+            return false;
         }
 
         lastConnectitvityResult = true;
         return true;
     }
-
     /// <summary>
     /// Attempts to send a file to a printer
     /// Inherit from Printer and override this function to create printer specific uploads in code

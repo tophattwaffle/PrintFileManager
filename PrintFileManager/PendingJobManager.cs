@@ -27,8 +27,10 @@ public static class PendingJobManager
         {
             throw new Exception("RecheckDelay in ini is not a valid int.");
         }
+        
+        _recheckDelay = delay;
 
-        Utils.Log($"Will attempt to contact offline machines every: {delay} seconds");
+        Utils.Log($"Will attempt to contact offline machines every: {_recheckDelay} seconds");
         
         Task.Run(ReadPendingFiles);
 
@@ -40,6 +42,7 @@ public static class PendingJobManager
             {
                 try 
                 {
+                    await Task.Delay(TimeSpan.FromSeconds(1), _cts.Token);
                     await TimerLoop(_cts.Token);
                 }
                 catch (OperationCanceledException)
@@ -145,7 +148,7 @@ public static class PendingJobManager
     {
         while (true)
         {
-            await Task.Delay(_recheckDelay, token);
+            await Task.Delay(TimeSpan.FromSeconds(_recheckDelay), token);
 
             var pendingFile = await PendingJobs.GetSnapshotAsync();
 
